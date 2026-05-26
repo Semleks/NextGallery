@@ -1,0 +1,39 @@
+# IntelliJ / Android Studio
+*.iml
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
+.idea/deviceManager.xml
+
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+**/build/
+
+# Local machine config
+local.properties
+
+# Native build outputs
+.externalNativeBuild/
+.cxx/
+
+# Android build artifacts
+*.apk
+*.aab
+*.ap_
+*.dm
+output-metadata.json
+/app/release/
+
+# Tooling captures
+captures/
+
+# OS files
+.DS_Store
+Thumbs.db
