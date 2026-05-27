@@ -47,9 +47,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -312,13 +312,66 @@ private fun GalleryScreen(
             }
         }
 
-        PrimaryTabRow(
-            selectedTabIndex = selectedTab.ordinal,
+        Box(modifier = Modifier.weight(1f)) {
+            when {
+                uiState.isLoading && uiState.items.isEmpty() -> LoadingState()
+                uiState.errorMessage != null -> ErrorState(
+                    message = uiState.errorMessage,
+                    onRetryClick = onRetryClick
+                )
+                selectedTab == GalleryTab.Photos -> when {
+                    sortedItems.isEmpty() -> EmptyState()
+                    else -> PullToRefreshBox(
+                        isRefreshing = uiState.isLoading,
+                        onRefresh = onRetryClick,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        PhotoGrid(
+                            items = groupedItems,
+                            gridState = gridState,
+                            authHeader = uiState.authHeader,
+                            selectedIds = selectedIds,
+                            onItemClick = { item ->
+                                if (selectedIds.isNotEmpty()) {
+                                    selectedIds = selectedIds.toggle(item.id)
+                                } else {
+                                    selectedIndex = sortedItems.indexOfFirst { it.id == item.id }
+                                }
+                            },
+                            onItemLongClick = { item ->
+                                selectedIds = selectedIds.toggle(item.id)
+                            }
+                        )
+                    }
+                }
+                selectedTab == GalleryTab.Trash -> TrashContent(
+                    uiState = uiState,
+                    selectedIds = selectedTrashIds,
+                    onToggleSelection = { item ->
+                        selectedTrashIds = selectedTrashIds.toggle(item.id)
+                    },
+                    onRestoreClick = {
+                        val selectedItems = uiState.trashItems.filter { it.id in selectedTrashIds }
+                        selectedTrashIds = emptySet()
+                        onRestoreTrashClick(selectedItems)
+                    },
+                    onDeleteClick = {
+                        val selectedItems = uiState.trashItems.filter { it.id in selectedTrashIds }
+                        selectedTrashIds = emptySet()
+                        onDeleteTrashClick(selectedItems)
+                    },
+                    onEmptyClick = onEmptyTrashClick
+                )
+                else -> MemoriesSectionPlaceholder(selectedTab)
+            }
+        }
+
+        NavigationBar(
             containerColor = MaterialTheme.colorScheme.background,
             contentColor = MaterialTheme.colorScheme.onBackground
         ) {
             GalleryTab.entries.forEach { tab ->
-                Tab(
+                NavigationBarItem(
                     selected = selectedTab == tab,
                     onClick = {
                         selectedTab = tab
@@ -328,60 +381,10 @@ private fun GalleryScreen(
                             onTrashTabSelected()
                         }
                     },
-                    text = { Text(tab.title) }
+                    icon = { Text(tab.icon) },
+                    label = { Text(tab.title, maxLines = 1) }
                 )
             }
-        }
-
-        when {
-            uiState.isLoading && uiState.items.isEmpty() -> LoadingState()
-            uiState.errorMessage != null -> ErrorState(
-                message = uiState.errorMessage,
-                onRetryClick = onRetryClick
-            )
-            selectedTab == GalleryTab.Photos -> when {
-                sortedItems.isEmpty() -> EmptyState()
-                else -> PullToRefreshBox(
-                    isRefreshing = uiState.isLoading,
-                    onRefresh = onRetryClick,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    PhotoGrid(
-                        items = groupedItems,
-                        gridState = gridState,
-                        authHeader = uiState.authHeader,
-                        selectedIds = selectedIds,
-                        onItemClick = { item ->
-                            if (selectedIds.isNotEmpty()) {
-                                selectedIds = selectedIds.toggle(item.id)
-                            } else {
-                                selectedIndex = sortedItems.indexOfFirst { it.id == item.id }
-                            }
-                        },
-                        onItemLongClick = { item ->
-                            selectedIds = selectedIds.toggle(item.id)
-                        }
-                    )
-                }
-            }
-            selectedTab == GalleryTab.Trash -> TrashContent(
-                uiState = uiState,
-                selectedIds = selectedTrashIds,
-                onToggleSelection = { item ->
-                    selectedTrashIds = selectedTrashIds.toggle(item.id)
-                },
-                onRestoreClick = {
-                    val selectedItems = uiState.trashItems.filter { it.id in selectedTrashIds }
-                    selectedTrashIds = emptySet()
-                    onRestoreTrashClick(selectedItems)
-                },
-                onDeleteClick = {
-                    val selectedItems = uiState.trashItems.filter { it.id in selectedTrashIds }
-                    selectedTrashIds = emptySet()
-                    onDeleteTrashClick(selectedItems)
-                },
-                onEmptyClick = onEmptyTrashClick
-            )
         }
     }
 
@@ -807,6 +810,30 @@ private fun EmptyTrashState() {
 }
 
 @Composable
+private fun MemoriesSectionPlaceholder(tab: GalleryTab) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = tab.title,
+                color = MaterialTheme.colorScheme.onBackground,
+                style = MaterialTheme.typography.titleLarge
+            )
+            Text(
+                text = "Подключу через Memories API следующим шагом.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.bodyLarge
+            )
+        }
+    }
+}
+
+@Composable
 private fun ZoomablePhoto(
     item: MediaItem,
     authHeader: String?,
@@ -931,9 +958,16 @@ private const val DOUBLE_TAP_SLOP_PX = 24f
 private const val FAST_SCROLL_MIN_ITEMS = 40
 private const val GITHUB_URL = "https://github.com/Semleks"
 
-private enum class GalleryTab(val title: String) {
-    Photos("Фото"),
-    Trash("Корзина")
+private enum class GalleryTab(val title: String, val icon: String) {
+    Photos("Фото", "Ф"),
+    Albums("Альбомы", "А"),
+    Favorites("Избранное", "★"),
+    People("Люди", "Л"),
+    Archive("Архив", "З"),
+    Map("Карта", "К"),
+    Places("Места", "М"),
+    Tags("Метки", "#"),
+    Trash("Корзина", "×")
 }
 
 private enum class PhotoSortOrder(

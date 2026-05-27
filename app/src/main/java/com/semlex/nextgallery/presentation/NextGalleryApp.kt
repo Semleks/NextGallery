@@ -59,6 +59,7 @@ fun NextGalleryApp() {
         composable(NextGalleryRoute.Auth.path) {
             AuthRoute(
                 credentialsDataStore = appContainer.credentialsDataStore,
+                loginFlowClient = appContainer.loginFlowClient,
                 mediaRepository = appContainer.mediaRepository,
                 onAuthenticated = {
                     navController.navigate(NextGalleryRoute.Gallery.path) {

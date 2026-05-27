@@ -2,6 +2,7 @@ package com.semlex.nextgallery.data
 
 import android.content.Context
 import com.semlex.nextgallery.data.auth.CredentialsDataStore
+import com.semlex.nextgallery.data.auth.NextcloudLoginFlowClient
 import com.semlex.nextgallery.data.media.NextcloudMediaRepository
 import com.semlex.nextgallery.data.network.NextcloudWebDavClient
 import okhttp3.Dispatcher
@@ -21,6 +22,7 @@ class AppContainer(context: Context) {
         .build()
 
     val credentialsDataStore = CredentialsDataStore(context.applicationContext)
+    val loginFlowClient = NextcloudLoginFlowClient(okHttpClient)
 
     val mediaRepository = NextcloudMediaRepository(
         context = context.applicationContext,

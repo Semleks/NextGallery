@@ -30,9 +30,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -41,40 +41,49 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.semlex.nextgallery.data.auth.CredentialsDataStore
+import com.semlex.nextgallery.data.auth.NextcloudLoginFlowClient
 import com.semlex.nextgallery.data.media.NextcloudMediaRepository
 import com.semlex.nextgallery.ui.theme.NextGalleryTheme
 
 @Composable
 fun AuthRoute(
     credentialsDataStore: CredentialsDataStore,
+    loginFlowClient: NextcloudLoginFlowClient,
     mediaRepository: NextcloudMediaRepository,
     onAuthenticated: () -> Unit,
     viewModel: AuthViewModel = viewModel(
         factory = AuthViewModelFactory(
             credentialsDataStore = credentialsDataStore,
+            loginFlowClient = loginFlowClient,
             mediaRepository = mediaRepository
         )
     )
 ) {
     val uiState = viewModel.uiState.collectAsStateWithLifecycle().value
+    val uriHandler = LocalUriHandler.current
 
     AuthScreen(
         uiState = uiState,
         onServerUrlChange = viewModel::onServerUrlChange,
-        onUsernameChange = viewModel::onUsernameChange,
-        onPasswordChange = viewModel::onPasswordChange,
-        onConnectClick = { viewModel.connect(onAuthenticated) }
+        onConnectClick = {
+            viewModel.connect(
+                onOpenLoginUrl = uriHandler::openUri,
+                onAuthenticated = onAuthenticated
+            )
+        }
     )
 }
 
 private class AuthViewModelFactory(
     private val credentialsDataStore: CredentialsDataStore,
+    private val loginFlowClient: NextcloudLoginFlowClient,
     private val mediaRepository: NextcloudMediaRepository
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return AuthViewModel(
             credentialsDataStore = credentialsDataStore,
+            loginFlowClient = loginFlowClient,
             mediaRepository = mediaRepository
         ) as T
     }
@@ -84,8 +93,6 @@ private class AuthViewModelFactory(
 private fun AuthScreen(
     uiState: AuthUiState,
     onServerUrlChange: (String) -> Unit,
-    onUsernameChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
     onConnectClick: () -> Unit
 ) {
     Box(
@@ -126,24 +133,13 @@ private fun AuthScreen(
                         imeAction = ImeAction.Next
                     )
 
-                    NextGalleryTextField(
-                        value = uiState.username,
-                        onValueChange = onUsernameChange,
-                        label = "Логин",
-                        placeholder = "Semlex...",
-                        keyboardType = KeyboardType.Text,
-                        imeAction = ImeAction.Next
-                    )
-
-                    NextGalleryTextField(
-                        value = uiState.password,
-                        onValueChange = onPasswordChange,
-                        label = "Пароль приложения",
-                        placeholder = "•••••••",
-                        keyboardType = KeyboardType.Password,
-                        imeAction = ImeAction.Done,
-                        visualTransformation = PasswordVisualTransformation()
-                    )
+                    if (uiState.isWaitingForBrowser) {
+                        Text(
+                            text = "Заверши вход в браузере. Приложение подключится автоматически.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
 
                     uiState.errorMessage?.let { message ->
                         Text(
@@ -172,7 +168,7 @@ private fun AuthScreen(
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
                         } else {
-                            Text("Подключиться")
+                            Text("Войти через браузер")
                         }
                     }
                 }
@@ -255,8 +251,6 @@ private fun AuthScreenPreview() {
         AuthScreen(
             uiState = AuthUiState(),
             onServerUrlChange = {},
-            onUsernameChange = {},
-            onPasswordChange = {},
             onConnectClick = {}
         )
     }

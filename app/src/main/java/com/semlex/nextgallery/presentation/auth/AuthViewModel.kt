@@ -3,8 +3,8 @@ package com.semlex.nextgallery.presentation.auth
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.semlex.nextgallery.data.auth.CredentialsDataStore
+import com.semlex.nextgallery.data.auth.NextcloudLoginFlowClient
 import com.semlex.nextgallery.data.media.NextcloudMediaRepository
-import com.semlex.nextgallery.domain.auth.NextcloudCredentials
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +14,7 @@ import java.io.IOException
 
 class AuthViewModel(
     private val credentialsDataStore: CredentialsDataStore,
+    private val loginFlowClient: NextcloudLoginFlowClient,
     private val mediaRepository: NextcloudMediaRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(AuthUiState())
@@ -28,32 +29,15 @@ class AuthViewModel(
         }
     }
 
-    fun onUsernameChange(value: String) {
-        _uiState.update {
-            it.copy(
-                username = value.trim(),
-                errorMessage = null
-            )
-        }
-    }
-
-    fun onPasswordChange(value: String) {
-        _uiState.update {
-            it.copy(
-                password = value,
-                errorMessage = null
-            )
-        }
-    }
-
-    fun connect(onAuthenticated: () -> Unit) {
+    fun connect(
+        onOpenLoginUrl: (String) -> Unit,
+        onAuthenticated: () -> Unit
+    ) {
         val state = _uiState.value
         val message = when {
             state.serverUrl.isBlank() -> "Укажи адрес Nextcloud"
             !state.serverUrl.startsWith("https://") && !state.serverUrl.startsWith("http://") ->
                 "Адрес должен начинаться с http:// или https://"
-            state.username.isBlank() -> "Укажи логин"
-            state.password.isBlank() -> "Укажи пароль приложения"
             else -> null
         }
 
@@ -63,15 +47,13 @@ class AuthViewModel(
         }
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, isWaitingForBrowser = false, errorMessage = null) }
 
             runCatching {
-                val credentials = NextcloudCredentials(
-                    serverUrl = state.serverUrl,
-                    username = state.username,
-                    password = state.password
-                )
-
+                val flow = loginFlowClient.createLoginFlow(state.serverUrl)
+                _uiState.update { it.copy(isWaitingForBrowser = true) }
+                onOpenLoginUrl(flow.loginUrl)
+                val credentials = loginFlowClient.pollCredentials(flow)
                 mediaRepository.verifyConnection(credentials)
                 credentialsDataStore.save(credentials)
             }.onSuccess {
@@ -80,6 +62,7 @@ class AuthViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
+                        isWaitingForBrowser = false,
                         errorMessage = throwable.toLoginErrorMessage()
                     )
                 }
